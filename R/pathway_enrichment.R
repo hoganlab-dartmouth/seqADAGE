@@ -5,10 +5,14 @@
 #        It should be imported by other scripts.
 ################################################################################
 #library(pacman)
+#install.packages('pacman')
 #pacman::p_load("readr")
+
 #source(file.path("..", "node_interpretation", "signature_helper.R"))
-#source('node_interpretation/signature_helper.R')
-source('signature_helper.R')
+library(readr)
+
+source('node_interpretation/signature_helper.R')
+
 
 enrichment.test <- function(gene.set, pathway.terms, geneN){
   # This function tests pathway enrichment for a gene set on a group of
@@ -48,7 +52,7 @@ test.one.model <- function(weight_matrix, pathway, HW_cutoff) {
 
   nodeN <- ncol(weight_matrix)
   geneN <- nrow(weight_matrix)
-  #print(dim(weight_matrix))
+  print(dim(weight_matrix))
   pvalue_table <- list()
   for (node in 1:nodeN) {
 
@@ -61,8 +65,8 @@ test.one.model <- function(weight_matrix, pathway, HW_cutoff) {
     HW_genes_neg <- rownames(weight_matrix)[weight_matrix[, node] <= neg_cutoff]
 
     # pathway enrichment analysis for positive high-weight genes
-    #print(length(HW_genes_pos))
-    #print(length(HW_genes_neg))
+    print(length(HW_genes_pos))
+    print(length(HW_genes_neg))
     pvalue_list <- enrichment.test(HW_genes_pos, pathway, geneN)
     this_table_pos <- data.frame(node = paste("Node", rep(node, nrow(pathway))),
                                  side = rep("pos", nrow(pathway)),
@@ -111,23 +115,23 @@ one.pathway.analysis <- function(netfile, geneID, pathway, outfile1,
   #            component in PCA or ICA model
   # output_all: boolean, whether to write outfile2 that stores every enrichment
   #             test
-  #print('one.pathway.analysis')
+  print('one.pathway.analysis')
   # load the weight matrix
   geneN = nrow(geneID)
   weight = read_delim(netfile, delim = ',', col_names = F, n_max = geneN,
                       skip = 0)
   #weight = read_delim(netfile, delim = '\t', col_names = F, n_max = geneN,
   #                    skip = 4)
-  #print(dim(weight))
-  #print(weight[1,1])
+  print(dim(weight))
+  print(weight[1,1])
   weight_matrix <- data.matrix(weight[1:geneN, ])
   rownames(weight_matrix) = geneID$X
-  #print(geneID$X[1])
+  print(geneID$X[1])
   # test pathway association between all nodes in a model and all pathways
-  #print(dim(pathway))
-  #print(pathway[1,1])
+  print(dim(pathway))
+  print(pathway[1,1])
   pvalue_table <- test.one.model(weight_matrix, pathway, HW_cutoff)
-  #print(dim(pvalue_table))
+  print(dim(pvalue_table))
   if (component) {
     # rename node to component for PCA and ICA models
     colnames(pvalue_table)[1] = 'component'
@@ -135,7 +139,7 @@ one.pathway.analysis <- function(netfile, geneID, pathway, outfile1,
 
   # get significant results and write to file
   pvalue_table_sig = pvalue_table[which(pvalue_table$qvalue <= sig_cutoff), ]
-  #print(dim(pvalue_table_sig))
+  print(dim(pvalue_table_sig))
   write.table(pvalue_table_sig, outfile1, col.names = T, row.names = F,
               quote = F, sep = '\t')
 
