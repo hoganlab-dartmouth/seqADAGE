@@ -7,7 +7,8 @@
 #library(pacman)
 #pacman::p_load("readr")
 #source(file.path("..", "node_interpretation", "signature_helper.R"))
-source('node_interpretation/signature_helper.R')
+#source('node_interpretation/signature_helper.R')
+source('signature_helper.R')
 
 enrichment.test <- function(gene.set, pathway.terms, geneN){
   # This function tests pathway enrichment for a gene set on a group of
