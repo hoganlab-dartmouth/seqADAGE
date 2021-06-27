@@ -8,14 +8,17 @@ Usage
 	constructor
 
 """
-import os
-#os.environ['KERAS_BACKEND'] = 'theano'
-from keras.layers import Input, Dense, Activation, Layer
-from keras import activations
-import keras.backend as K
+#import os
+##os.environ['KERAS_BACKEND'] = 'theano'
+#from keras.layers import Input, Dense, Activation, Layer
+#from keras import activations
+#import keras.backend as K
 
 
-
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import optimizers, regularizers, layers, initializers, models, activations
+from tensorflow.keras.layers import Layer
 
 
 class TiedWeightsEncoder(Layer):
@@ -35,7 +38,7 @@ class TiedWeightsEncoder(Layer):
 		super(TiedWeightsEncoder, self).build(input_shape)
 
 	def call(self, x):
-		output = K.dot(x - self.encoder.weights[1], K.transpose(self.encoder.weights[0]))
+		output = tf.matmul(x - self.encoder.weights[1], tf.transpose(self.encoder.weights[0]), name = 'dot')
 		#print(output)
 		if self.activation is not None:
 			output = self.activation(output)

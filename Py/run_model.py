@@ -17,8 +17,8 @@ Output:
 	**Weights, Loss and validation loss saved as files
 """
 
-import os
-os.environ['KERAS_BACKEND'] = 'tensorflow'
+#import os
+#os.environ['KERAS_BACKEND'] = 'tensorflow'
 #import keras as keras
 
 import tensorflow as tf
@@ -41,11 +41,10 @@ import Adage as ad
 
 
 def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
-			  act='sigmoid', init='glorot_uniform', tied=True, batch_size=10):
+			  act='sigmoid', init='glorot_uniform', tied=True, batch_size=10, v=1):
 	"""
 
 	"""
-	print("test")
 	print(keras.backend.backend())
 	#all_comp = np.loadtxt(open(input_file, "rb"), delimiter=',', skiprows = 1)
 	all_comp = pd.read_csv(input_file, index_col=0)
@@ -63,10 +62,10 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 								  seed, kl1, kl2)
 	autoencoder.summary()
 	autoencoder, history = train_model(autoencoder, x_train,
-		                               x_train_noisy, epochs, seed, batch_size, lr)
+		                               x_train_noisy, epochs, seed, batch_size, lr, v)
 
 
-	weights, b_weights = autoencoder.get_weights()
+	weights, b_weights = autoencoder.get_weights()[0:2]
 
 	file_desc = (input_file[:-4] + '_seed:' + str(seed)
 				 + "_kl1:" + str(kl1)
@@ -113,7 +112,7 @@ def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 
 
 	decoder = tw.TiedWeightsEncoder(input_shape=(encoding_dim,),
-					output_dim=gene_num,encoded=encoded, activation=None)
+					output_dim=gene_num,encoded=encoded, activation="sigmoid")
 
 	autoencoder = keras.Sequential()
 	autoencoder.add(encoded)
@@ -123,14 +122,14 @@ def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 
 def prep_data(all_comp, seed):
 
-	all_comp_np = all_comp.values.astype("float32")
+	all_comp_np = all_comp.values.astype("float64")
 	print(np.shape(all_comp_np))
 	# this is the size of our input
 	gene_num = np.size(all_comp_np, 0)
 
 	x_train = all_comp_np.transpose()
-	x_train = x_train.reshape((len(x_train),
-							   np.prod(x_train.shape[1:])))
+	#x_train = x_train.reshape((len(x_train),
+	#						   np.prod(x_train.shape[1:])))
 	noise_factor = 0.1
 	x_train_noisy = x_train + (noise_factor
 		            * np.random.normal(loc=0.0,scale=1.0, size=x_train.shape))
@@ -138,12 +137,12 @@ def prep_data(all_comp, seed):
 
 	return(x_train, x_train_noisy)
 
-def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, lr):
+def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, lr, v):
 
-	np.random.seed(seed)
+	#np.random.seed(seed)
 	train_idxs = np.random.choice(x_train.shape[0],
-							      int(x_train.shape[0]*0.9), replace=True)
-
+							      int(x_train.shape[0]*0.9), replace=False)
+	print(train_idxs[1:5])
 	x_train_train = x_train[train_idxs,:]
 	x_train_test = x_train[~np.in1d(range(x_train.shape[0]),train_idxs),:]
 
@@ -152,18 +151,20 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 		                                              train_idxs),:]
 
 
-	#optim = optimizers.Adadelta(lr=lr) # lr=0.001, rho=0.95, epsilon=1e-07
-	optim = optimizers.SGD(learning_rate=lr) # lr=0.001, rho=0.95, epsilon=1e-07
-	autoencoder.compile(optimizer=optim, loss=tf.keras.losses.BinaryCrossentropy(from_logits=False)) # binary_crossentropy mse tf.keras.losses.MeanSquaredError()
+	#optim = optimizers.Adadelta(learning_rate=lr) # lr=0.001, rho=0.95, epsilon=1e-07
+	optim = optimizers.SGD(learning_rate=lr, momentum=.9) # lr=0.001, rho=0.95, epsilon=1e-07
+	autoencoder.compile(optimizer=optim, loss=tf.keras.losses.BinaryCrossentropy(from_logits=False)) # "mse" tf.keras.losses.BinaryCrossentropy(from_logits=False) mse 
 
-	history = autoencoder.fit(x_train_noise_train, x_train_train,
+	history = autoencoder.fit(x_train_noisy, x_train,
 	              	epochs=epochs,
 	                batch_size=batch_size,
 	                shuffle=True,
-	                #validation_split = 0.1,
-	                verbose=1,
-	                validation_data=(np.array(x_train_noise_test),
-	                				 np.array(x_train_test)))
+	                validation_split = 0.1,
+	                #verbose=1,
+	                #validation_data=(np.array(x_train_noise_test),
+	                #				 np.array(x_train_test)),
+	                verbose=v
+	                )
 	return(autoencoder, history)
 
 

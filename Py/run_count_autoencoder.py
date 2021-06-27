@@ -17,30 +17,35 @@ Output:
 	**Weights, Loss and validation loss saved as files
 """
 
-import os
-os.environ['KERAS_BACKEND'] = 'tensorflow'
-import keras as keras
+#import os
+#os.environ['KERAS_BACKEND'] = 'tensorflow'
+#import keras as keras
+
+import tensorflow as tf
+from tensorflow import keras
+
 import argparse
 import numpy as np
 import csv
 import pandas as pd
 import math
 
-from keras import optimizers, regularizers, layers
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
-from keras.layers import Input, Dense
-from keras.models import Model, Sequential
+from tensorflow.keras import optimizers, regularizers, layers, initializers, models
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+#from keras.layers import Input, Dense
+#from keras.models import Model, Sequential
 #from tensorflow.keras import initializers
 import TiedWeightsEncoder as tw
 import Adage as ad
 import tensorflow as tf
 
 
+
 from keras import initializers
 
 
 def run_count_autoencoder(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
-			  act='sigmoid', init='glorot_uniform', tied=True, batch_size=10):
+			  act='sigmoid', init='glorot_uniform', tied=True, batch_size=10, v=1):
 	"""
 
 	"""
@@ -61,7 +66,7 @@ def run_count_autoencoder(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.
 		autoencoder = unlinked_ae(encoding_dim, gene_num, act, init,
 								  seed, kl1_tf, kl2)
 	autoencoder, history = train_model(autoencoder, x_train,
-		                               x_train_noisy, epochs, seed, batch_size,lr)
+		                               x_train_noisy, epochs, seed, batch_size,lr,v)
 	weights = autoencoder.get_weights()
 
 	file_desc = (input_file[:-4] + '_seed:' + str(seed)
@@ -81,27 +86,27 @@ def run_count_autoencoder(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.
 
 
 def unlinked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
-	input_img = Input(shape=(gene_num,))
-	init_s = keras.initializers.glorot_normal(seed=seed)
-	encoded = Dense(encoding_dim, input_shape=(gene_num, ),
+	input_img = layers.Input(shape=(gene_num,))
+	init_s = initializers.glorot_normal(seed=seed)
+	encoded = layers.Dense(encoding_dim, input_shape=(gene_num, ),
 					activation=act, #sigmoid
 					#kernel_initializer = init_s,
 					kernel_initializer = init,
 					kernel_regularizer = regularizers.l1_l2(l1=kl1, l2=kl2),
     				activity_regularizer = regularizers.l1(0))(input_img)
 
-	decoded = Dense(gene_num, activation='sigmoid',
+	decoded = layers.Dense(gene_num, activation='sigmoid',
     				activity_regularizer = regularizers.l1(0))(encoded)
 
 	# this model maps an input to its reconstruction
-	autoencoder = Model(input_img, decoded)
+	autoencoder = models.Model(input_img, decoded)
 	return(autoencoder)
 
 
 def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
-	input_img = Input(shape=(gene_num,))
-	init_s = keras.initializers.glorot_normal(seed=seed)
-	encoded = Dense(encoding_dim, input_shape=(gene_num, ), activation=act,
+	input_img = layers.Input(shape=(gene_num,))
+	init_s = initializers.glorot_normal(seed=seed)
+	encoded = layers.Dense(encoding_dim, input_shape=(gene_num, ), activation=act,
 					#kernel_initializer = init_s,
 					kernel_initializer = init,
 					kernel_regularizer = regularizers.l1_l2(l1=kl1, l2=kl2),
@@ -109,23 +114,24 @@ def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 
 
 	decoder = tw.TiedWeightsEncoder(input_shape=(encoding_dim,),
-					output_dim=gene_num,encoded=encoded, activation=act)
+					output_dim=gene_num,encoded=encoded, activation="sigmoid")
 
-	autoencoder = Sequential()
+	autoencoder = keras.Sequential()
 	autoencoder.add(encoded)
 	autoencoder.add(decoder)
 	return(autoencoder)
 
 
 def prep_data(all_comp, seed):
-	all_comp_np = all_comp.values.astype("float32")
+
+	all_comp_np = all_comp.values.astype("float64")
 	print(np.shape(all_comp_np))
 	# this is the size of our input
 	gene_num = np.size(all_comp_np, 0)
 
 	x_train = all_comp_np.transpose()
-	x_train = x_train.reshape((len(x_train),
-							   np.prod(x_train.shape[1:])))
+	#x_train = x_train.reshape((len(x_train),
+	#						   np.prod(x_train.shape[1:])))
 	noise_factor = 0.1
 	x_train_noisy = x_train + (noise_factor
 		            * np.random.normal(loc=0.0,scale=1.0, size=x_train.shape))
@@ -225,7 +231,7 @@ def loss_neg_bin_tf_differentiable(y_pred, y_true):
     return result
 
 
-def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, lr):
+def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, lr,v):
 
 	np.random.seed(seed)
 	train_idxs = np.random.choice(x_train.shape[0],
@@ -244,7 +250,7 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 	optim = optimizers.Adadelta(lr = 0.001) # lr=0.001, rho=0.95, epsilon=1e-07
 	optim = optimizers.RMSprop(lr = lr, clipvalue=5.0)
 	#autoencoder.compile(optimizer=optim, loss='binary_crossentropy') # binary_crossentropy mse
-	autoencoder.compile(optimizer=optim, loss=zinbl2) # binary_crossentropy mse
+	autoencoder.compile(optimizer=optim, loss=zinbl2) # binary_crossentropy mse zinbl2
 
 	callbacks = []
 
@@ -257,7 +263,7 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 	                shuffle=True,
 	                validation_split = 0.1,
 	                callbacks=callbacks,
-	                verbose=1#,
+	                verbose=v#,
 	                #validation_data=(np.array(x_train_noise_test),
 	                #				 np.array(x_train_test))
 	                )
