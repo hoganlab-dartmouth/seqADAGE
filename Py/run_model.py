@@ -45,7 +45,7 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 	"""
 
 	"""
-	print(keras.backend.backend())
+	#print(keras.backend.backend())
 	#all_comp = np.loadtxt(open(input_file, "rb"), delimiter=',', skiprows = 1)
 	all_comp = pd.read_csv(input_file, index_col=0)
 	 # this is the size of our input
@@ -60,7 +60,7 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 	else:
 		autoencoder = unlinked_ae(encoding_dim, gene_num, act, init,
 								  seed, kl1, kl2)
-	autoencoder.summary()
+	#autoencoder.summary()
 	autoencoder, history = train_model(autoencoder, x_train,
 		                               x_train_noisy, epochs, seed, batch_size, lr, v)
 
@@ -74,7 +74,8 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 				 + '_init:' + init
 				 + '_ep:' + str(epochs)
 				 + '_tied:' + str(tied)
-				 + '_batch:' + str(batch_size))
+				 + '_batch:' + str(batch_size)
+				 + '_lr:' + str(lr))
 
 
 	write_data(file_desc, weights, b_weights, history)
@@ -123,7 +124,7 @@ def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 def prep_data(all_comp, seed):
 
 	all_comp_np = all_comp.values.astype("float64")
-	print(np.shape(all_comp_np))
+	#print(np.shape(all_comp_np))
 	# this is the size of our input
 	gene_num = np.size(all_comp_np, 0)
 
@@ -139,10 +140,10 @@ def prep_data(all_comp, seed):
 
 def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, lr, v):
 
-	#np.random.seed(seed)
+	np.random.seed(seed)
 	train_idxs = np.random.choice(x_train.shape[0],
 							      int(x_train.shape[0]*0.9), replace=False)
-	print(train_idxs[1:5])
+	#print(train_idxs[1:5])
 	x_train_train = x_train[train_idxs,:]
 	x_train_test = x_train[~np.in1d(range(x_train.shape[0]),train_idxs),:]
 
@@ -153,7 +154,7 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 
 	#optim = optimizers.Adadelta(learning_rate=lr) # lr=0.001, rho=0.95, epsilon=1e-07
 	optim = optimizers.SGD(learning_rate=lr, momentum=.9) # lr=0.001, rho=0.95, epsilon=1e-07
-	autoencoder.compile(optimizer=optim, loss=tf.keras.losses.BinaryCrossentropy(from_logits=False)) # "mse" tf.keras.losses.BinaryCrossentropy(from_logits=False) mse 
+	autoencoder.compile(optimizer=optim, loss=tf.keras.losses.BinaryCrossentropy(from_logits=False)) # "mse" tf.keras.losses.BinaryCrossentropy(from_logits=False) mse
 
 	history = autoencoder.fit(x_train_noisy, x_train,
 	              	epochs=epochs,
@@ -172,18 +173,18 @@ def write_data(file_desc, weights, b_weights, history):
 	"""
 	Save logs and output for a model in an outputs foolder
 	"""
-	print(np.shape(weights))
-	np.savetxt('../outputs/' + file_desc + '_en_weights.csv',
-		np.matrix(weights), fmt = '%s', delimiter=',')
-	np.savetxt('../outputs/' + file_desc + '_en_bias',
-		np.matrix(b_weights), fmt = '%s', delimiter=',')
+	#print(np.shape(weights))
+	np.savetxt('../outputs/weights/data_files/' + file_desc + '_en_weights_da.csv',
+		np.matrix(weights[0]), fmt = '%s', delimiter=',')
+	np.savetxt('../outputs/bias/data_files/' + file_desc + '_en_bias_da.csv',
+		np.matrix(weights[1]), fmt = '%s', delimiter=',')
 	#np.savetxt('../outputs/' + file_desc + '_de_weights.csv',
 	#	np.matrix(weights[2]), fmt = '%s', delimiter=',')
 	#np.savetxt('../outputs/' + file_desc + '_de_bias.csv',
-	#	np.matrix(weights[3]), fmt = '%s', delimiter=',')
-	np.savetxt('../outputs/' + file_desc + '_loss.csv',
+#		np.matrix(weights[3]), fmt = '%s', delimiter=',')
+	np.savetxt('../outputs/loss/data_files//' + file_desc + '_loss_da.csv',
 		np.matrix(history.history['loss']), fmt = '%s', delimiter=',')
-	np.savetxt('../outputs/' + file_desc + '_val_loss.csv',
+	np.savetxt('../outputs/val_loss/data_files/' + file_desc + '_val_loss_da.csv',
 		np.matrix(history.history['val_loss']), fmt = '%s', delimiter=',')
 
 
@@ -192,5 +193,5 @@ if __name__ == '__main__':
 		parser.add_argument('filename',type=str, nargs=1,
 			help='filpath to training set.')
 		args=parser.parse_args()
-		print(args.filename[0])
+		#print(args.filename[0])
 		run_model(args.filename[0])
