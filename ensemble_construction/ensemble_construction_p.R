@@ -20,7 +20,10 @@
 ###########################################################
 #library(ppcor)
 library(ClusterR)
-pacman::p_load("cluster", "ff",  "readr") #"sprint",
+#pacman::p_load("cluster", "ff",  "readr") #"sprint",
+library(cluster)
+library(readr)
+library(ff)
 #ptest()
 source("ConsensusClusterPlus_modified2.R")
 #source("ppam.R")
@@ -81,6 +84,7 @@ col_n <- count.fields(data_file, sep = ",")[1]
 geneID <- read.table(data_file, sep = ",", header = T,
                      colClasses = c("character", rep("NULL", col_n - 1)))
 geneN <- nrow(geneID)
+print(geneN)
 # read in weight matrix from network files and combine them together
 combo_weight <- c()
 model_count <- 0
@@ -95,7 +99,7 @@ for (seed in begin:end) {
   netfile <- file.path(netfolder, netfile)
   #print(netfile)
   weight <- read_delim(netfile, delim = ",", col_names = F, n_max = geneN,
-                       skip = 2)
+                       skip = 0)
   weight_matrix <- data.matrix(weight[1:geneN, ])
   nodeN <- ncol(weight_matrix)
   combo_weight <- cbind(combo_weight, weight_matrix)
@@ -132,7 +136,7 @@ print("consensus clustering starts")
 print("omg")
 print(dim(combo_weight_cor_dist))
 res <- ConsensusClusterPlus.M(combo_weight_cor_dist, oneK = k, reps = 10,
-                              pItem = 0.6, pFeature = 1, distance = "pearson",
+                              pItem = 0.8, pFeature = 1, distance = "pearson",
                               clusterAlg = "pcmHook",
                               seed = cluster_seed, verbose = TRUE)
 print("consensus clustering finished")
