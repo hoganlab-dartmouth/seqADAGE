@@ -1,2 +1,9 @@
-
-.DS_Store
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.csv
+.tsv
+.txt
+.png
+.svg
