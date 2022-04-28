@@ -1,0 +1,102 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Georgia Doing georgia.doing.gr@dartmouth.edu
+date crated: 
+date modified: Sys.Date()
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Intro:
+
+Overdispersion: varaince > mean
+Code
+
+```{python}
+def zinbl2(y_true,y_pred):
+	y_true = tf.cast(y_true, tf.float32)
+	y_pred = tf.cast(y_pred, tf.float32)
+	eps = 1e-10 
+	theta = 1e6
+	pi = 0.5
+	ridge_lambda = 0
+	t1 = tf.math.lgamma(1e6 + 1e-10) + tf.math.lgamma(y_true + 1.0) - tf.math.lgamma(y_true+1e6+1e-10)
+	t2 = (1e6+y_true) * tf.math.log(1.0 + (y_pred/(1e6+1e-10))) + (y_true * (tf.math.log(1e6+1e-10) - tf.math.log(y_pred + 1e-10)))
+
+	nb_case = t1+t2 - tf.math.log(1.0 - pi+eps)
+
+	zero_nb = tf.pow(theta/(theta+y_pred+eps), theta)
+	zero_case = -tf.math.log(pi + (( 1.0-pi)*zero_nb)+eps)
+	result = tf.where(tf.less(y_true,1e-8), zero_case, nb_case)
+	ridge = ridge_lambda*tf.square(pi)
+	result += ridge
+
+
+	final = tf.reduce_mean(result)
+	return _nan2inf(final)
+```
+
+
+Pseudocode:
+
+Cast predicted and true data into float32
+Set vars
+  eps as 1e-10 (for numerical stability, set as constant)
+  theta as 1e6 (dispersion)
+  pi as 0.5 (zero inflation)
+  lambda as 0 (ridge - Lnorm?)
+    
+Calc tensor 1 as
+  log(abs(gamma(eps+theta))) + log(abs(gamma(true data+1))) - log(abs(gamma(true data+eps+theta)))
+  
+Calc tensor 2 as 
+  (1e6+true data) * log(1+ (predicted data/(1e6+1e-10))) + true data * log(1e6+1e-10 - log(predicted data + 1e-10))
+
+Calc NB case as
+  tensor 1 + tensor 2 - log(1 - pi + eps)
+  
+Calc ZINB as
+  (theta / (predicted data + theta + eps)) ** theta
+  
+Calc zero case as
+  - log(pi + ((1-pi) * ZINB) + eps)
+  
+Calc result as
+  If true data < 1e-8, zero case
+  else, NB case
+  
+Calc ridge as
+  lambda * pi**2
+  
+Sum result and ridge for all predicted features, return mean
+
+Equation:
+
+$$ log(|\Gamma(\epsilon+\theta)|) + log(|\Gamma{Y+1}|) - log(|\Gamma{Y+\epsilon+\theta}|) \\ + \\ (\theta + Y) \cdot log(1+\frac{Y'}{\theta+\epsilon}) + Y \cdot log(\theta+\epsilon)-log(Y'+\epsilon))$$
+```{r}
+png('nb_dists.png')
+x1 <- rnbinom(500, mu = 4, size = 1)
+x2 <- rnbinom(500, mu = 4, size = 3)
+x3 <- rnbinom(500, mu = 4, size = 1e6) # size = dispersion here
+h1 <- hist(x1, breaks = 20, plot = FALSE)
+h2 <- hist(x2, breaks = h1$breaks, plot = FALSE)
+h3 <- hist(x3, breaks = h1$breaks, plot = FALSE)
+barplot(rbind(h1$counts, h2$counts, h3$counts),
+        beside = TRUE, col = c("red","blue","cyan"),
+        names.arg = round(h1$breaks[-length(h1$breaks)]))
+dev.off()
+```
+
+# Log Liklihood
+
+$$log_e(L) = log_{e}(L(p|n,y)) = log_{e} \binom{n}{y}  + y \cdot log_e(p) + (n-y) \cdot log_e(1-p) $$
+## Background
+
+## Purpose
+
+## Outline
+
+## Reflections

@@ -1,0 +1,1261 @@
+---
+title: "HWG enrichment"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)
+library(reshape2)
+```
+
+
+
+```{r, message=F, warning=F}
+source('../node_interpretation/pathway_enrichment.R')
+source('~/Dropbox (Hogan Lab)/Resources/Annotations/annotation_functions.R')
+```
+
+## datasets
+```{r}
+operons <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/operons_format.txt', sep='\t', stringsAsFactors = F, header = F)
+kegg <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/pseudomonas_KEGG_terms.txt', sep='\t', stringsAsFactors = F, header = F)
+go <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/manual_GO_BP_terms.txt', sep='\t', stringsAsFactors = F, header = F)
+regulons <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/regulons_format.txt', sep='\t', stringsAsFactors = F, header = F)
+crc_regulons <- read.csv('~/Dropbox (Hogan Lab)/Resources/Regulons/crc_regulons_format.csv', sep=',', stringsAsFactors = F, header = F)
+```
+
+```{r}
+seq_compendium <- read.csv('../data_files/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_byall.csv', stringsAsFactors = F)
+colnames(seq_compendium)[1] <- 'geneID'
+
+seq_eA_weights <- read.csv('../ensemble_construction/ensemble_models/net300_76models_660_735_k=300_seed=1_ClusterByweighted_avgweight_network_ADAGE.txt', sep = '\t',skip=2, header=F, stringsAsFactors = F, nrow = 5561)
+rownames(seq_eA_weights) <- seq_compendium$geneID[-c(1,2)]
+
+seq_A_weights661 <- read.csv('../outputs/e_models/300/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_byall_seed:661_kl1:1e-05_kl2:0_act:relu_init:glorot_uniform_ep:250_tied:True_batch:10_lr:0.1_en_weights_da.csv', sep = ',',skip=0, header=F, stringsAsFactors = F)
+rownames(seq_A_weights661) <- seq_compendium$geneID
+
+
+
+seq_A_weights_list <- lapply(c(0:9), function(x){
+    model <- read.csv(paste("../outputs/e_models/300/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_byall_seed:66",x,"_kl1:1e-05_kl2:0_act:relu_init:glorot_uniform_ep:250_tied:True_batch:10_lr:0.1_en_weights_da.csv",sep=""), sep = ',',skip=0, header=F, stringsAsFactors = F)
+  rownames(model) <- seq_compendium$geneID
+  model
+}
+)
+names(seq_A_weights_list) <- paste('seed:',c(0:9),sep='')
+#../outputs/weights/data_files/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_bygene_seed:660_kl1:0_kl2:0_act:sigmoid_init:glorot_uniform_ep:250_tied:True_batch:10_lr:1.0_en_weights_da.csv
+```
+
+```{r}
+model_list <- c(list('seq_eA'=seq_eA_weights),seq_A_weights_list, model_list_format_for_kegg)
+```
+
+
+```{r}
+get_hwgs <- function(model){
+  model_std <- apply(model, 2, FUN = function(x) 2.5*sd(x))
+  hwgs_bool_p <- t(apply(model, 1, FUN = function(x) x > model_std))
+  hwgs_bool_n <- t(apply(model, 1, FUN = function(x) x < -1 * model_std))
+  hwgs_bool <- as.data.frame(cbind(hwgs_bool_p,hwgs_bool_n))
+  hwgs <- apply(hwgs_bool, 2, FUN =  function(x) rownames(model)[x])
+}
+```
+
+```{r}
+seq_eA_weights_std <- apply(seq_eA_weights, 2, FUN = function(x) 2.5*sd(x))
+seq_eA_weights_hwgs_bool_p <- as.data.frame(t(apply(seq_eA_weights, 1, FUN = function(x) x > seq_eA_weights_std)))
+seq_eA_weights_hwgs_bool_n <- as.data.frame(t(apply(seq_eA_weights, 1, FUN = function(x) x < -1 * seq_eA_weights_std)))
+seq_eA_weights_hwgs_bool <- as.data.frame(cbind(seq_eA_weights_hwgs_bool_p, seq_eA_weights_hwgs_bool_p))
+seq_eA_weights_hwgs <- apply(seq_eA_weights_hwgs_bool, 2, FUN =  function(x) rownames(seq_eA_weights)[x])
+```
+
+```{r}
+seq_eA_weights_hwgs <- get_hwgs(seq_eA_weights)
+seq_A_weights_hwgs <- get_hwgs(seq_A_weights)
+```
+
+```{r}
+hwg_list <- lapply(model_list, function(x) get_hwgs(x))
+```
+
+```{r}
+p_mat_seq_eA <- data.frame(lapply(seq_eA_weights_hwgs, function(x) {
+  node_genes <- unlist(x) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+  node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+  enrichment.test(node_genes_clean, kegg[,c(1,3)], 5210) # 5210 5549
+}
+)
+)
+
+p_mat_seq_A <- data.frame(lapply(seq_A_weights_hwgs, function(x) {
+  node_genes <- unlist(x) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+  node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+  enrichment.test(node_genes_clean, kegg[,c(1,3)], 5210) # 5210 5549
+}
+)
+)
+
+
+```
+
+```{r}
+pmat_list <- lapply(hwg_list, function(hwgs){
+  data.frame(lapply(hwgs, function(x) {
+  node_genes <- unlist(x) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+  node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+  enrichment.test(node_genes_clean, kegg[,c(1,3)], 5563) # 5210 5549
+  }))
+})
+```
+
+
+```{r}
+p_mat_seq_eA_df <- data.frame(p_mat_seq_eA)
+p_mat_seq_A_df <- data.frame(p_mat_seq_A)
+
+```
+
+
+
+```{r}
+pmat_list <- list(p_mat_seq_eA_df,
+                  p_mat_seq_A_df)
+```
+
+```{r}
+pmat_nlog <- lapply(pmat_list, function(x) -log(x))
+```
+
+```{r}
+pmat_fdr <- lapply(pmat_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+```
+
+```{r}
+pmat_tables <- lapply(pmat_nlog, function(x) kegg$V1[x > 5])
+```
+                                                               
+```{r}
+pmat_colsums <- lapply(pmat_list, function(x){
+  temp <- (rowSums(x < 0.05))
+  print(sum(temp>0))
+  names(temp) <- kegg$V1
+  sort(temp,decreasing = T)
+  }
+  )
+lapply(pmat_colsums, function(x) kable_classic(kable(x)))
+```
+
+
+```{r}
+pmat_colsums <- lapply(pmat_fdr[c(1,2,4)], function(x) colSums(x < 0.05  ))
+
+pdf('plots/TheanovKeras_array_ops_2.5std.pdf')
+boxplot(pmat_colsums, ylab = '# operons per signature', 
+        names = c('ADAGE2','Theano-Array','Keras-Array'),
+        col = c('medium blue', 'dark blue', 'medium purple'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+pmat_colsums <- lapply(pmat_fdr[c(2,4,3,5)], function(x) colSums(x < 0.05  ))
+
+pdf('plots/ArrayvSeq_ops_2.5std.pdf', width = 10)
+boxplot(pmat_colsums, ylab = '# operons per signature', 
+        names = c('Theano-Array','Theano-eq','Keras-Array','Keras-Seq'),
+        
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+pmat_colsums_df <- data.frame(pmat_colsums)
+
+g <- ggplot(pmat_colsums_df)
+```
+
+
+```{r}
+hwg_list <- list(hwgs, hwgs_array423,
+                  hwgs_rbseq,
+                  hwgs_keras_arry, hwgs_keras_arry561, hwgs_keras_arry562,
+                  hwgs_keras_seq, hwgs_keras_seq561, hwgs_keras_seq562)
+
+sig_sizes_list <- lapply(hwg_list[c(1,2,3,4,7,5,8,6,9)], function(x) colSums(!(x == '')))
+boxplot(sig_sizes_list, ylim = c(1,200))
+```
+
+```{r}
+pmat_colsums <- lapply(pmat_fdr[c(1,2,4)], function(x) colSums(x < 0.05  ))
+
+pdf('plots/TheanovKeras_array_sig_sizes_2.5std.pdf')
+boxplot(sig_sizes_list[c(1,2,4)], ylab = '# HWG per signature', 
+        names = c('ADAGE2','Theano-Array','Keras-Array'),
+        col = c('medium blue', 'dark blue', 'medium purple'),
+        par(cex=1.4), ylim = c(1,150))
+dev.off()
+
+pdf('plots/ArrayvSeq_sig_sizes_2.5std.pdf', width = 10)
+boxplot(sig_sizes_list[c(2,3,4,5)], ylab = '# operons per signature', 
+        names = c('Theano-Array','Theano-seq','Keras-Array','Keras-Seq'),
+        
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        par(cex=1.4), ylim = c(1,150))
+dev.off()
+```
+
+
+```{r}
+hwg_nocutoff_files <- list.files('./models_HWGs/no_cutoff/', pattern = 'hwgs_0.0_rs.csv')
+hwg_nocutoff_list <- lapply(hwg_nocutoff_files, function(x) read.csv(paste('./models_HWGs/no_cutoff/',x, sep=''), skip=0, header = T, stringsAsFactors = F, sep='\t'))
+```
+
+```{r}
+
+
+hwg_100_pmat_list <- lapply(hwg_nocutoff_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, operons[,c(1,3)], 5210) # 5210 5549
+    }
+  )
+  )
+}
+)
+
+```
+
+```{r}
+hwg_100_fdr_list <- lapply(hwg_50_pmat_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+
+
+hwg_100_colsums <- lapply(hwg_50_fdr_list, function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_colsums)
+```
+
+```{r}
+hwg_100_fdr_list <- lapply(hwg_100_pmat_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+
+hwg_100_fdr_list[8] <- lapply(hwg_100_pmat_list_theanoseq, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+
+
+
+hwg_100_colsums <- lapply(hwg_100_fdr_list, function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_colsums)
+```
+
+
+```{r}
+pdf('plots/TheanovKeras_array_ops_top100.pdf')
+boxplot(hwg_100_colsums[c(7,1)], ylab = '# operon per top100 HWGs', 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        par(cex=1.4))
+dev.off()
+
+
+pdf('plots/ArrayvSeq_ops_top100.pdf', width = 10)
+boxplot(hwg_100_colsums[c(7,8,1,2)], ylab = '# operons per top100 HWGs', 
+        names = c('Theano-Array','Theano-Seq','Keras-Array','Keras-Seq'),
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+hwg_100_pmat_operons_list <- lapply(hwg_nocutoff_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, operons[,c(1,3)], 5210) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+
+```{r}
+hwg_100_fdr_operons_list <- lapply(hwg_100_pmat_operons_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+
+hwg_100_operons_colsums <- lapply(hwg_100_fdr_operons_list, function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_operons_colsums)
+```
+
+
+```{r}
+kegg <- read.csv('pseudomonas_KEGG_terms.txt', sep='\t', stringsAsFactors = F)
+go <- read.csv('manual_GO_BP_terms.txt', sep='\t', stringsAsFactors = F)
+regulons <- read.csv('regulons_format.txt', sep='\t', stringsAsFactors = F)
+```
+
+```{r}
+
+
+hwg_100_pmat_kegg_list <- lapply(hwg_nocutoff_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, kegg[,c(1,3)], 5210) # 5210 5549
+    }
+  )
+  )
+}
+)
+
+
+hwg_100_pmat_go_list <- lapply(hwg_nocutoff_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, go[,c(1,3)], 5210) # 5210 5549
+    }
+  )
+  )
+}
+)
+
+hwg_100_pmat_regs_list <- lapply(hwg_nocutoff_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, regulons[,c(1,3)], 5210) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+hwg_100_fdr_kegg_list <- lapply(hwg_100_pmat_kegg_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_kegg_colsums <- lapply(hwg_100_fdr_kegg_list, function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_kegg_colsums)
+```
+
+
+```{r}
+pdf('plots/TheanovKeras_array_kegg_top100.pdf')
+boxplot(hwg_100_fdr_kegg_colsums[c(7,1)], ylab = '# KEGG per top100 HWGs', 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        par(cex=1.4))
+dev.off()
+
+pdf('plots/ArrayvSeq_kegg_top100.pdf', width = 10)
+boxplot(hwg_100_fdr_kegg_colsums[c(7,8,1,2)], ylab = '# KEGG per top100 HWGs', 
+        names = c('Theano-Array','Theano-Seq','Keras-Array','Keras-Seq'),
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+hwg_100_fdr_go_list <- lapply(hwg_100_pmat_go_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_go_colsums <- lapply(hwg_100_fdr_go_list, function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_go_colsums)
+```
+
+```{r}
+pdf('plots/TheanovKeras_array_go_top100.pdf')
+boxplot(hwg_100_fdr_go_colsums[c(7,1)], ylab = '# GO per top100 HWGs', 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        par(cex=1.4))
+dev.off()
+
+
+pdf('plots/ArrayvSeq_go_top100.pdf', width = 10)
+boxplot(hwg_100_fdr_go_colsums[c(7,8,1,2)], ylab = '# GO per top100 HWGs', 
+        names = c('Theano-Array','Theano-Seq','Keras-Array','Keras-Seq'),
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+hwg_100_fdr_reg_list <- lapply(hwg_100_pmat_regs_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_reg_colsums <- lapply(hwg_100_fdr_reg_list, function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_reg_colsums)
+
+```
+```{r}
+pdf('plots/TheanovKeras_array_reg_top100.pdf')
+boxplot(hwg_100_fdr_reg_colsums[c(7,1)], ylab = '# Regulons per top100 HWGs', 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        par(cex=1.4))
+dev.off()
+
+pdf('plots/ArrayvSeq_reg_top100.pdf', width = 10)
+boxplot(hwg_100_fdr_reg_colsums[c(7,8,1,2)], ylab = '# Regulons per top100 HWGs', 
+        names = c('Theano-Array','Theano-Seq','Keras-Array','Keras-Seq'),
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+### GSEA
+
+```{r}
+gsea_files <- list.files('./GSEA/')
+gsea_list <- lapply(gsea_files, function(x) read.csv(paste('./GSEA/',x, sep=''),
+                                                     sep='\t',
+                                                     stringsAsFactors = F))
+
+gsea_tables <- sapply(gsea_list, function(x) table(x$node[x$q_value < 0.05]))
+
+boxplot(gsea_tables[,c(1,2)], 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        #par(cex=1.4)
+        )
+```
+
+```{r}
+pdf('plots/TheanovKeras_array_gsea.pdf')
+boxplot(gsea_tables[,c(1,2)], 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        #par(cex=1.4), 
+        ylab = '# Operons per Sig (GSEA)'
+        )
+dev.off()
+
+
+pdf('plots/ArrayvSeq_gsea.pdf', width = 10)
+boxplot(gsea_tables[,c(1,4,2,3)],
+        names = c('Theano-Array','Theano-Seq','Keras-Array','Keras-Seq'),
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        #par(cex=1.4),
+         ylab = '# Operons per Sig (GSEA)'
+        )
+dev.off()
+```
+
+```{r}
+gsea_tables_operon <- sapply(gsea_list, function(x) as.numeric(table(x$operon)))
+
+boxplot(gsea_tables_operon)
+```
+
+```{r}
+pdf('plots/TheanovKeras_array_gsea_byops.pdf')
+boxplot(gsea_tables_operon[c(1,2)], 
+        names = c('Theano-Array','Keras-Array'),
+        col = c( 'dark blue', 'medium purple'),
+        #par(cex=1.4), 
+        ylab = '# Sig per Operon (GSEA)'
+        )
+dev.off()
+
+
+pdf('plots/ArrayvSeq_gsea_byops.pdf', width = 10)
+boxplot(gsea_tables_operon[c(1,4,2,3)],
+        names = c('Theano-Array','Theano-Seq','Keras-Array','Keras-Seq'),
+        col = c('dark blue', 'light blue', 'medium purple', 'violet'),
+        #par(cex=1.4),
+         ylab = '# Sig per Operon (GSEA)'
+        )
+dev.off()
+```
+
+
+## tanh
+```{r}
+hwg_nocutoff_tanh_files <- list.files('./models_HWGs/no_cutoff/tanh/', pattern = 'hwgs_0.0_rs.csv')
+hwg_nocutoff_tanh_list <- lapply(hwg_nocutoff_tanh_files, function(x) read.csv(paste('./models_HWGs/no_cutoff/tanh/',x, sep=''), skip=0, header = T, stringsAsFactors = F, sep='\t'))
+```
+
+## count encoders
+```{r}
+hwg_nocutoff_count_files <- list.files('./models_HWGs/no_cutoff/count_encoder/', pattern = 'hwgs_0.0_rs.csv')
+hwg_nocutoff_count_list <- lapply(hwg_nocutoff_count_files, function(x) read.csv(paste('./models_HWGs/no_cutoff/count_encoder/',x, sep=''), skip=0, header = T, stringsAsFactors = F, sep='\t'))
+```
+
+```{r}
+eADAGE <- read.csv('./models_HWGs/net300_std2.5_neg_pos_HWGs.txt', stringsAsFactors = F, sep='\t')
+eADAGE_PAnum <- apply(eADAGE, c(1,2), FUN = function(x) name_to_PAO1(x))
+```
+
+```{r}
+hwg_100_pmat_kegg_ce_list <- lapply(hwg_nocutoff_tanh_list[c(1)], function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, kegg[,c(1,3)], 5165) # 5210 5549 5165
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+hwg_100_pmat_regs_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, regulons[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+hwg_100_fdr_regs_count_list <- lapply(hwg_100_pmat_regs_count_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+lapply(hwg_100_fdr_regs_count_list[], function(x) sum(rowSums(x < 0.05  )>0))
+hwg_100_fdr_count_regs_colsums <- lapply(hwg_100_fdr_regs_count_list[], function(x) rowSums(x < 0.05  ))
+#lapply(hwg_100_fdr_regs_count_list[], function(x) sum(colSums(x < 0.05  )>0))
+boxplot(hwg_100_fdr_count_regs_colsums)
+```
+
+```{r}
+hwg_100_pmat_crc_regs_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, crc_regulons[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+
+eADAGE_pmat_crc_regs_count_list <- lapply(list(eADAGE_PAnum), function(x){
+  data.frame(apply(x[,], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, crc_regulons[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+eADAGE_fdr_crc_regs_count_list <- lapply(eADAGE_pmat_crc_regs_count_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+
+
+eADAGE_fdr_count_crc_regs_colsums <- lapply(eADAGE_fdr_crc_regs_count_list[], function(x) rowSums(x < 0.05  ))
+boxplot(eADAGE_fdr_count_crc_regs_colsums)
+```
+
+```{r}
+crc_mi_e <- min(eADAGE_fdr_crc_regs_count_list[[1]]) 
+colnames(eADAGE)[ apply((eADAGE_fdr_crc_regs_count_list[[1]]),2, FUN =  function(x) crc_mi_e %in% x)]
+
+eADAGE_fdr_crc_regs_count_list[[1]][,c('Node.247.Pos','Node.251.Pos','Node.53.Pos','Node.76.Pos','Node.90.Pos')]
+eADAGE_fdr_crc_regs_count_list[[1]][,c('Node.226.Pos','Node.121.Neg', 'Node.204.Neg', 'Node.75.Neg', 'Node.86.Neg', 'Node.3.Pos',
+                                       'Node.155.Neg','Node.205.Neg', 'Node.134.Pos')]
+```
+
+```{r}
+hwg_100_fdr_crc_regs_count_list <- lapply(hwg_100_pmat_crc_regs_count_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+lapply(hwg_100_fdr_crc_regs_count_list[], function(x) sum(colSums(x < 0.05  )>0))
+hwg_100_fdr_count_crc_regs_colsums <- lapply(hwg_100_fdr_crc_regs_count_list[], function(x) rowSums(x < 0.05  ))
+#lapply(hwg_100_fdr_regs_count_list[], function(x) sum(colSums(x < 0.05  )>0))
+boxplot(hwg_100_fdr_count_crc_regs_colsums)
+```
+```{r, fig.height=10, fig.width=50}
+#View(hwg_100_fdr_regs_count_list[[1]])
+#lapply(hwg_100_fdr_regs_count_list[], function(x) rowSums(x < 0.05  ))
+lapply(hwg_100_fdr_go_count_list[], function(x) sum(colSums(x < 0.05  )>0))
+
+regs_summary <- lapply(hwg_100_fdr_go_count_list[], function(x) rowSums(x < 0.05  ))
+names(regs_summary) <- hwg_nocutoff_count_files
+#lapply(regs_summary, function(x) names(x) <- kegg$V1)
+plot_df <- data.frame(regs_summary)
+plot_df$regulon <- sapply(go$V1, function(x) x)
+plot_df_m <- melt(plot_df)
+g <- ggplot(plot_df_m, aes(x=regulon, y=value, fill = variable)) +
+  geom_bar(stat='identity') +
+  theme(legend.position = 'left', axis.text.x = element_text(angle=90),
+        axis.text.y = element_text(size = 36))
+g
+```
+
+```{r, fig.height=10, fig.width=50}
+#View(hwg_100_fdr_regs_count_list[[1]])
+#lapply(hwg_100_fdr_regs_count_list[], function(x) rowSums(x < 0.05  ))
+
+regs_summary <- lapply(hwg_100_fdr_kegg_count_list[], function(x) rowSums(x < 0.05  ))
+names(regs_summary) <- hwg_nocutoff_count_files
+#lapply(regs_summary, function(x) names(x) <- kegg$V1)
+plot_df <- data.frame(regs_summary)
+plot_df$regulon <- sapply(kegg$V1, function(x) x)
+plot_df_m <- melt(plot_df)
+g <- ggplot(plot_df_m, aes(x=regulon, y=value, fill = variable)) +
+  geom_bar(stat='identity') +
+  theme(legend.position = 'left', axis.text.x = element_text(angle=90),
+        axis.text.y = element_text(size = 36))
+g
+```
+
+```{r}
+hwg_100_pmat_ops_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, operons[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+hwg_100_fdr_ops_count_list <- lapply(hwg_100_pmat_ops_count_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+lapply(hwg_100_fdr_ops_count_list[], function(x) sum(colSums(x < 0.05  )>0))
+hwg_100_fdr_count_ops_colsums <- lapply(hwg_100_fdr_ops_count_list[], function(x) rowSums(x < 0.05))
+lapply(hwg_100_pmat_regs_count_list[], function(x) sum(colSums(x < 0.005  )>0))
+boxplot(hwg_100_fdr_count_ops_colsums)
+```
+
+
+
+
+
+
+```{r}
+hwg_100_pmat_kegg_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, kegg[,c(1,3)], 5165) # 5210 5549 5165
+    }
+  )
+  )
+}
+)
+
+hwg_100_pmat_go_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, go[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+
+hwg_100_pmat_regs_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, regulons[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+
+
+hwg_100_pmat_ops_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, operons[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+```{r}
+hwg_100_pmat_kegg_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, kegg[,c(1,3)], 5165) # 5210 5549 5165
+    }
+  )
+  )
+}
+)
+
+```
+
+```{r}
+hwg_100_fdr_kegg_count_list <- lapply(hwg_100_pmat_kegg_count_list, function(x){
+  apply(x[,c(1:300)], 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+lapply(hwg_100_pmat_kegg_count_list[], function(x) sum(rowSums(x < 0.05  )>0))
+lapply(hwg_100_fdr_kegg_count_list[], function(x) sum(rowSums(x < 0.05  )>0))
+hwg_100_fdr_count_kegg_colsums <- lapply(hwg_100_fdr_kegg_count_list[], function(x) rowSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_count_kegg_colsums)
+```
+
+
+```{r}
+hwg_100_pmat_go_count_list <- lapply(hwg_nocutoff_count_list, function(x){
+  data.frame(apply(x[c(1:100),], 2, FUN = function(y) {
+    node_genes <- unlist(y) #sapply(x, function(y) name_to_PAO1(y))
+  #print(node_genes)
+    node_genes_clean <- node_genes[!(node_genes == '')]
+  #print(node_genes_clean)
+    enrichment.test(node_genes_clean, go[,c(1,3)], 5165) # 5210 5549
+    }
+  )
+  )
+}
+)
+```
+
+```{r}
+hwg_100_fdr_go_count_list <- lapply(hwg_100_pmat_go_count_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+
+lapply(hwg_100_fdr_go_count_list[], function(x) sum(rowSums(x < 0.05  )>0))
+hwg_100_fdr_count_go_colsums <- lapply(hwg_100_fdr_go_count_list[], function(x) rowSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_count_go_colsums)
+```
+
+## tanH
+```{r}
+hwg_100_fdr_kegg_tanh_list <- lapply(hwg_100_pmat_kegg_ce_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_tanh_kegg_colsums <- lapply(hwg_100_fdr_kegg_tanh_list[], function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_tanh_kegg_colsums)
+```
+
+```{r}
+hwg_100_fdr_go_ce_list <- lapply(hwg_100_pmat_go_ce_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_ce_go_colsums <- lapply(hwg_100_fdr_go_ce_list[], function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_ce_go_colsums)
+```
+
+```{r}
+hwg_100_fdr_regs_tanh_list <- lapply(hwg_100_pmat_regs_ce_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_tanh_regs_colsums <- lapply(hwg_100_fdr_regs_tanh_list[], function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_tanh_regs_colsums)
+```
+
+```{r}
+hwg_100_fdr_ops_tanh_list <- lapply(hwg_100_pmat_ops_ce_list, function(x){
+  apply(x, 2, FUN = function(y) p.adjust(y, method = "fdr"))
+}
+)
+hwg_100_fdr_tanh_ops_colsums <- lapply(hwg_100_fdr_ops_tanh_list[], function(x) colSums(x < 0.05  ))
+
+boxplot(hwg_100_fdr_tanh_ops_colsums)
+```
+
+
+#### Compare params
+
+```{r}
+
+hwg_100_colsums_ops_comp <- list(
+                          'Sigmoid Array' = hwg_100_colsums[[1]],
+                          'Sigmoid Seq' = hwg_100_colsums[[2]],
+                          'Tanh Array' = hwg_100_fdr_tanh_ops_colsums[[1]],
+                          'Tanh Seq' = hwg_100_fdr_tanh_ops_colsums[[2]],
+                          'Tanh Array L1' = hwg_100_fdr_tanh_ops_colsums[[11]],
+                          'Tanh Seq L1' = hwg_100_fdr_tanh_ops_colsums[[12]]
+)
+pdf('plots/SigmoidvTanh_ops_top100.pdf', width = 13)
+boxplot(hwg_100_colsums_ops_comp, ylab = '# operons per top100 HWGs', 
+        names = names(hwg_100_colsums_ops_comp),
+        col = c('medium purple', 'violet','medium purple', 'violet','medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+
+hwg_100_colsums_kegg_comp <- list(
+                          'Sigmoid Array' = hwg_100_fdr_kegg_colsums[[1]],
+                          'Sigmoid Seq' = hwg_100_fdr_kegg_colsums[[2]],
+                          'Tanh Array' = hwg_100_fdr_tanh_kegg_colsums[[1]],
+                          'Tanh Seq' = hwg_100_fdr_tanh_kegg_colsums[[2]],
+                          'Tanh Array L1' = hwg_100_fdr_tanh_kegg_colsums[[11]],
+                          'Tanh Seq L1' = hwg_100_fdr_tanh_kegg_colsums[[12]]
+)
+pdf('plots/SigmoidvTanh_kegg_top100.pdf', width = 13)
+boxplot(hwg_100_colsums_kegg_comp, ylab = '# KEGG per top100 HWGs', 
+        names = names(hwg_100_colsums_ops_comp),
+        col = c('medium purple', 'violet','medium purple', 'violet','medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+
+hwg_100_colsums_go_comp <- list(
+                          'Sigmoid Array' = hwg_100_fdr_go_colsums[[1]],
+                          'Sigmoid Seq' = hwg_100_fdr_go_colsums[[2]],
+                          'Tanh Array' = hwg_100_fdr_tanh_go_colsums[[1]],
+                          'Tanh Seq' = hwg_100_fdr_tanh_go_colsums[[2]],
+                          'Tanh Array L1' = hwg_100_fdr_tanh_go_colsums[[11]],
+                          'Tanh Seq L1' = hwg_100_fdr_tanh_go_colsums[[12]]
+)
+pdf('plots/SigmoidvTanh_go_top100.pdf', width = 13)
+boxplot(hwg_100_colsums_go_comp, ylab = '# GO per top100 HWGs', 
+        names = names(hwg_100_colsums_ops_comp),
+        col = c('medium purple', 'violet','medium purple', 'violet','medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+```{r}
+
+hwg_100_colsums_regs_comp <- list(
+                          'Sigmoid Array' = hwg_100_fdr_reg_colsums[[1]],
+                          'Sigmoid Seq' = hwg_100_fdr_reg_colsums[[2]],
+                          'Tanh Array' = hwg_100_fdr_tanh_regs_colsums[[1]],
+                          'Tanh Seq' = hwg_100_fdr_tanh_regs_colsums[[2]],
+                          'Tanh Array L1' = hwg_100_fdr_tanh_regs_colsums[[11]],
+                          'Tanh Seq L1' = hwg_100_fdr_tanh_regs_colsums[[12]]
+)
+pdf('plots/SigmoidvTanh_regs_top100.pdf', width = 13)
+boxplot(hwg_100_colsums_regs_comp, ylab = '# Regulons per top100 HWGs', 
+        names = names(hwg_100_colsums_ops_comp),
+        col = c('medium purple', 'violet','medium purple', 'violet','medium purple', 'violet'),
+        par(cex=1.4))
+dev.off()
+```
+
+### Genome coverage
+
+```{r}
+hwg_tables <- lapply(hwg_list, function(x) data.frame(table(unlist(x)[! unlist(x) == ''])))
+lapply(hwg_tables, function(x) hist(x$Freq))
+```
+
+
+
+
+```{r}
+hwg_tables_top100 <- lapply(hwg_nocutoff_list, function(x) table(unlist(x[c(1:100),])[! unlist(x[c(1:100),]) == '']))
+lapply(hwg_tables_top100, function(x) hist(x))
+```
+
+```{r}
+hwg_tables_top10 <- lapply(hwg_nocutoff_list, function(x) table(unlist(x[c(1:10),])[! unlist(x[c(1:10),]) == '']))
+lapply(hwg_tables_top10, function(x) hist(x))
+```
+
+
+
+
+```{r}
+hw_tables_top10_top6 <- lapply(hwg_tables_top10, function(x) head(x[order(x, decreasing = T)]))
+hw_tables_top10_top6
+```
+
+```{r}
+hw_tables_top10_top10 <- lapply(hwg_tables_top10, function(x) head(x[order(x, decreasing = T)], n=20))
+
+hw_tables_top10_top10_names <-lapply(hw_tables_top10_top10_names, function(x) sapply(names(x), function(y) PAO1_to_name(y)))
+hw_tables_top10_top10
+```
+
+```{r}
+intersect(intersect(intersect(hw_tables_top10_top10_names[[2]], hw_tables_top10_top10_names[[8]]),hw_tables_top10_top10_names[[4]]),hw_tables_top10_top10_names[[6]])
+```
+```{r}
+intersect(intersect(intersect(hw_tables_top10_top10_names[[2]], hw_tables_top10_top10_names[[2]]),hw_tables_top10_top10_names[[4]]),hw_tables_top10_top10_names[[6]])
+```
+
+```{r}
+intersect(intersect(intersect(hw_tables_top10_top10_names[[1]], hw_tables_top10_top10_names[[1]]),hw_tables_top10_top10_names[[3]]),hw_tables_top10_top10_names[[5]])
+```
+
+```{r}
+intersect(intersect(intersect(hw_tables_top10_top10_names[[1]], hw_tables_top10_top10_names[[7]]),hw_tables_top10_top10_names[[3]]),hw_tables_top10_top10_names[[5]])
+```
+```{r}
+intersect( hw_tables_top10_top10_names[[7]],union(union(hw_tables_top10_top10_names[[1]],hw_tables_top10_top10_names[[3]]),hw_tables_top10_top10_names[[5]]))
+```
+
+
+```{r}
+rbseq_with_names <- read.csv('../data_files/refine_bio_seq_clean_with_names.csv', stringsAsFactors = F)
+array_with_names <- read.csv('../data_files/train_set_normalized.csv', stringsAsFactors = F)
+```
+
+```{r}
+hist(as.numeric(unlist(rbseq_with_names[,c(2:996)])))
+```
+
+
+```{r}
+hist(as.numeric(rbseq_with_names[rbseq_with_names$X == 'PA1673',c(2:996)]))
+hist(as.numeric(rbseq_with_names[rbseq_with_names$X == 'PA4100',c(2:996)]))
+```
+
+```{r}
+library(ggplot2)
+library(reshape2)
+library(purrr)
+library(dplyr)
+```
+
+```{r}
+```
+
+
+```{r}
+full_join(hwg_tables[[2]], hwg_tables[[3]], by = 'Var1', all=T)
+hwg_tables_merged_df <- reduce(hwg_tables[],full_join, by = 'Var1', all=T)
+
+
+colnames(hwg_tables_merged_df) <- c('Gene','TADarr2','Tarr423','Tseq423','Karr560','Karr561','Karr562','Kseq560','Kseq561','Kseq562')
+
+hwg_tables_melt <- melt(hwg_tables_merged_df, id.vars = c('Gene'))
+hwg_tables_melt[is.na(hwg_tables_melt)] <- 0
+hwg_tables_melt$tdata <- as.character(hwg_tables_melt$variable)
+hwg_tables_melt$tdata[grepl('seq',hwg_tables_melt$variable)] <- 'rbseq'
+hwg_tables_melt$tdata[grepl('arr',hwg_tables_melt$variable)] <- 'array'
+
+hwg_tables_melt$plat <- as.character(hwg_tables_melt$variable)
+hwg_tables_melt$plat[grepl('T',hwg_tables_melt$variable)] <- 'theano'
+hwg_tables_melt$plat[grepl('K',hwg_tables_melt$variable)] <- 'keras'
+
+g <- ggplot(hwg_tables_melt, aes(x=value, color = variable, fill = variable)) +
+  geom_histogram(aes(y=..density..), position='dodge')
+g
+
+
+```
+
+```{r, fig.width=10}
+g <- ggplot(hwg_tables_melt, aes(x=value, color = tdata, fill = tdata)) +
+  scale_y_sqrt() + 
+  geom_histogram(aes(y=..density..), position='dodge')
+g
+pdf('plots/AerrayvSeq_topHWG_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+g <- ggplot(hwg_tables_melt[hwg_tables_melt$plat == 'theano',], aes(x=value, color = tdata, fill = tdata)) +
+  scale_y_sqrt() + 
+  geom_histogram(aes(y=..density..), position='dodge')
+g
+
+pdf('plots/AerrayvSeq_thenao_topHWG_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+g <- ggplot(hwg_tables_melt[hwg_tables_melt$plat == 'keras',], aes(x=value, color = tdata, fill = tdata)) +
+  scale_y_sqrt() + 
+  geom_histogram(aes(y=..density..), position='dodge')
+g
+pdf('plots/AerrayvSeq_keras_topHWG_hist.pdf')
+g
+dev.off()
+```
+
+
+
+
+```{r}
+rbseq_melt <- melt(rbseq_with_names, id.vars = c('X'))
+rbseq_melt$hw <- rbseq_melt$X %in% names(unlist(hwg_tables_top10))
+g <- ggplot(rbseq_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge', fill='white')
+g
+
+```
+
+```{r}
+rbseq_melt <- melt(rbseq_with_names, id.vars = c('X'))
+rbseq_melt$hw <- rbseq_melt$X %in% names(unlist(hw_tables_top10_top6))
+g <- ggplot(rbseq_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge', fill='white')
+g
+```
+
+```{r}
+rbseq_melt <- melt(rbseq_with_names, id.vars = c('X'))
+rbseq_melt$hw <- 'Not HW'
+rbseq_melt$hw[rbseq_melt$X %in% names(unlist(hwg_tables_top10[c(2,4,6,8)]))] <- 'HW'
+rbseq_melt$hw[rbseq_melt$X %in% names(unlist(hw_tables_top10_top6[c(2,4,6,8)]))] <- 'Top HW'
+
+g <- ggplot(rbseq_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white") +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dists_hw_topHW_seq_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+g <- ggplot(rbseq_melt, aes(x = value)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white", color='black') +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dist_seq_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+g <- ggplot(array_melt, aes(x = value)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white", color='black') +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dist_array_hist.pdf')
+g
+dev.off()
+```
+
+
+
+```{r}
+rbseq_melt <- melt(rbseq_with_names, id.vars = c('X'))
+rbseq_melt$hw <- 'Not HW'
+rbseq_melt$hw[rbseq_melt$X %in% names(unlist(hwg_tables_top10[c(2,4,6)]))] <- 'HW'
+rbseq_melt$hw[rbseq_melt$X %in% names(unlist(hw_tables_top10_top6[c(2,4,6)]))] <- 'Top HW'
+
+g <- ggplot(rbseq_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white") +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dists_hw_topHW_seq_hist_keras.pdf')
+g
+dev.off()
+```
+
+```{r}
+rbseq_melt <- melt(rbseq_with_names, id.vars = c('X'))
+rbseq_melt$hw <- 'Not HW'
+rbseq_melt$hw[rbseq_melt$X %in% names(unlist(hwg_tables_top10[c(8)]))] <- 'HW'
+rbseq_melt$hw[rbseq_melt$X %in% names(unlist(hw_tables_top10_top6[c(8)]))] <- 'Top HW'
+
+g <- ggplot(rbseq_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white") +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dists_hw_topHW_seq_hist_theano.pdf')
+g
+dev.off()
+```
+
+
+```{r}
+array_melt <- melt(array_with_names, id.vars = c('X'))
+array_melt$hw <- 'Not HW'
+array_melt$hw[rbseq_melt$X %in% names(unlist(hwg_tables_top10[c(2,4,6,8)-1]))] <- 'HW'
+array_melt$hw[rbseq_melt$X %in% names(unlist(hw_tables_top10_top6[c(2,4,6,8)-1]))] <- 'Top HW'
+
+g <- ggplot(array_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white") +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dists_hw_topHW_array_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+array_melt <- melt(array_with_names, id.vars = c('X'))
+array_melt$hw <- 'Not HW'
+array_melt$hw[rbseq_melt$X %in% names(unlist(hwg_tables_top10[c(2,4,6)-1]))] <- 'HW'
+array_melt$hw[rbseq_melt$X %in% names(unlist(hw_tables_top10_top6[c(2,4,6)-1]))] <- 'Top HW'
+
+g <- ggplot(array_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white") +
+  geom_density(alpha = 0.2)
+g
+
+pdf('plots/comp_act_dists_hw_topHW_array_hist_keras.pdf')
+g
+dev.off()
+```
+
+```{r}
+array_melt <- melt(array_with_names, id.vars = c('X'))
+array_melt$hw <- 'Not HW'
+array_melt$hw[rbseq_melt$X %in% names(unlist(hwg_tables_top10[c(8)-1]))] <- 'HW'
+array_melt$hw[rbseq_melt$X %in% names(unlist(hw_tables_top10_top6[c(8)-1]))] <- 'Top HW'
+
+g <- ggplot(array_melt, aes(x = value, color = hw)) +
+  geom_histogram(aes(y=..density..),position = 'dodge',fill = "white") +
+  geom_density(alpha = 0.2)
+g
+pdf('plots/comp_act_dists_hw_topHW_array_hist_theano.pdf')
+g
+dev.off()
+```
+
+```{r}
+rbseq_var <- data.frame('Gene' = rbseq_with_names[,1],
+                        'variance' = apply(rbseq_with_names[,-1], 1, FUN=function(x) sd(x)) )
+rbseq_var$hw <- 'Not HW'
+rbseq_var$hw[rbseq_var$Gene %in% names(unlist(hwg_tables_top10[c(2,4,6,8)]))] <- 'HW'
+rbseq_var$hw[rbseq_var$Gene %in% names(unlist(hw_tables_top10_top6[c(2,4,6,8)]))] <- 'Top HW'
+
+g <- ggplot(rbseq_var, aes(x=variance, color = hw)) +
+  geom_histogram(aes(y=..density..),position='dodge',fill= 'white')
+g
+
+pdf('plots/comp_varaicne_dists_hw_topHW_seq_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+array_var <- data.frame('Gene' = array_with_names[,1],
+                        'variance' = apply(array_with_names[,-1], 1, FUN=function(x) sd(x)) )
+array_var$hw <- 'Not HW'
+array_var$hw[array_var$Gene %in% names(unlist(hwg_tables_top10[c(2,4,6,8)-1]))] <- 'HW'
+array_var$hw[array_var$Gene %in% names(unlist(hw_tables_top10_top6[c(2,4,6,8)-1]))] <- 'Top HW'
+
+g <- ggplot(array_var, aes(x=variance, color = hw)) +
+  geom_histogram(aes(y=..density..),position='dodge',fill= 'white')
+g
+
+pdf('plots/comp_varaicne_dists_hw_topHW_array_hist.pdf')
+g
+dev.off()
+```
+
+
+```{r}
+rbseq_sum <- data.frame('Gene' = rbseq_with_names[,1],
+                        'sum' = apply(rbseq_with_names[,-1], 1, FUN=function(x) sum(x)) )
+rbseq_sum$hw <- 'Not HW'
+rbseq_sum$hw[rbseq_sum$Gene %in% names(unlist(hwg_tables_top10[c(2,4,6,8)]))] <- 'HW'
+rbseq_sum$hw[rbseq_sum$Gene %in% names(unlist(hw_tables_top10_top6[c(2,4,6,8)]))] <- 'Top HW'
+
+g <- ggplot(rbseq_sum, aes(x=sum, color = hw)) +
+  geom_histogram(aes(y=..density..),position='dodge',fill= 'white')
+g
+
+pdf('plots/comp_sum_dists_hw_topHW_seq_hist.pdf')
+g
+dev.off()
+```
+
+```{r}
+array_sum <- data.frame('Gene' = array_with_names[,1],
+                        'sum' = apply(array_with_names[,-1], 1, FUN=function(x) sum(x)) )
+array_sum$hw <- 'Not HW'
+array_sum$hw[array_sum$Gene %in% names(unlist(hwg_tables_top10[c(2,4,6,8)]))] <- 'HW'
+array_sum$hw[array_sum$Gene %in% names(unlist(hw_tables_top10_top6[c(2,4,6,8)]))] <- 'Top HW'
+
+g <- ggplot(array_sum, aes(x=sum, color = hw)) +
+  geom_histogram(aes(y=..density..),position='dodge',fill= 'white')
+g
+
+pdf('plots/comp_sum_dists_hw_topHW_array_hist.pdf')
+g
+dev.off()
+```

@@ -1,0 +1,75 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Georgia Doing georgia.doing.gr@dartmouth.edu
+date crated: 
+date modified: Sys.Date()
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+source('~/Dropbox (Hogan Lab)/Resources/Annotations/annotation_functions.R')
+```
+
+## Background
+
+## Purpose
+
+## Outline
+
+## Reflections
+```{r}
+data <- read.csv('../data_files/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_byall.csv', stringsAsFactors = F)
+```
+
+
+```{r, warning=FALSE}
+
+new_model <- read.csv('../outputs/e_models/300/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_byall_seed:661_kl1:1e-05_kl2:0_act:relu_init:glorot_uniform_ep:250_tied:True_batch:10_lr:0.1_en_weights_da.csv', stringsAsFactors = F, header=F)
+rownames(new_model) <- data$X
+hwgs_bool <- as.data.frame(apply(new_model, 2, FUN = function(x) x > 2.5*sd(x)))
+hwgs_p <- apply(hwgs_bool, 2, FUN = function(x) sapply(rownames(new_model)[x], function(y) PAO1_to_name(y)))
+hwgs_bool <- as.data.frame(apply(new_model, 2, FUN = function(x) x < -2.5*sd(x)))
+hwgs_n <- apply(hwgs_bool, 2, FUN = function(x) sapply(rownames(new_model)[x], function(y) PAO1_to_name(y)))
+hwgs <- c(hwgs_p, hwgs_n)
+hwgs_maxl <- sort(sapply(hwgs, function(x) length(x)), decreasing = T)
+hwgs_even <- lapply(hwgs, function(x) c(x, rep('NA', (hwgs_maxl[1] - length(x)))))
+hwgs_df <- data.matrix(do.call(cbind, hwgs_even))
+write.csv(hwgs_df, 'model_661_hwgs.csv', row.names = F)
+```
+
+```{r, warning=FALSE}
+
+new_model <- read.csv('../ensemble_construction/ensemble_models/net300_76models_660_735_k=300_seed=1_ClusterByweighted_avgweight_network_ADAGE.txt', stringsAsFactors = F, header=F, skip=2, nrows = 5561, sep='\t')
+rownames(new_model) <- data$X[3:5563]
+hwgs_bool <- as.data.frame(apply(new_model, 2, FUN = function(x) x > 2.5*sd(x)))
+hwgs_p <- apply(hwgs_bool, 2, FUN = function(x) sapply(rownames(new_model)[x], function(y) PAO1_to_name(y)))
+hwgs_bool <- as.data.frame(apply(new_model, 2, FUN = function(x) x < -2.5*sd(x)))
+hwgs_n <- apply(hwgs_bool, 2, FUN = function(x) sapply(rownames(new_model)[x], function(y) PAO1_to_name(y)))
+hwgs <- c(hwgs_p, hwgs_n)
+hwgs_maxl <- sort(sapply(hwgs, function(x) length(x)), decreasing = T)
+hwgs_even <- lapply(hwgs, function(x) c(x, rep('NA', (hwgs_maxl[1] - length(x)))))
+hwgs_df <- data.matrix(do.call(cbind, hwgs_even))
+write.csv(hwgs_df, 'seqADAGE_model_e75_hwgs.csv', row.names = F)
+write.csv(new_model, 'seqADAGE_model_e75.csv', row.names = T)
+```
+
+```{r, warning=FALSE}
+
+new_model <- read.csv('net300_76models_660_735_k=300_seed=1_ClusterByweighted_avgweight_network_ADAGE.txt', stringsAsFactors = F, header=F, skip=2, nrows = 5563, sep='\t')
+rownames(new_model) <- data$X#[3:5563]
+hwgs_bool <- as.data.frame(apply(new_model, 2, FUN = function(x) x > 2.5*sd(x, na.rm = T)))
+hwgs_p <- apply(hwgs_bool, 2, FUN = function(x) sapply(rownames(new_model)[x], function(y) PAO1_to_name(y)))
+hwgs_bool <- as.data.frame(apply(new_model, 2, FUN = function(x) x < -2.5*sd(x)))
+hwgs_n <- apply(hwgs_bool, 2, FUN = function(x) sapply(rownames(new_model)[x], function(y) PAO1_to_name(y)))
+hwgs <- c(hwgs_p, hwgs_n)
+hwgs_maxl <- sort(sapply(hwgs, function(x) length(x)), decreasing = T)
+hwgs_even <- lapply(hwgs, function(x) c(x, rep('NA', (hwgs_maxl[1] - length(x)))))
+hwgs_df <- data.matrix(do.call(cbind, hwgs_even))
+write.csv(hwgs_df, 'seqADAGE_model_e75_sig_hwgs.csv', row.names = F)
+write.csv(new_model, 'seqADAGE_model_e75_sig.csv', row.names = T)
+```

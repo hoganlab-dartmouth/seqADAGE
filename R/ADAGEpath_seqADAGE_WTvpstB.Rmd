@@ -1,0 +1,374 @@
+---
+title: "ADAGEpath - eADAGE"
+output: html_notebook
+---
+
+
+```{r}
+library("ADAGEpath")
+library("DT")
+library("readr")
+library("plyr")
+library(ggplot2)
+library(ggridges)
+library(preprocessCore)
+
+source('~/Dropbox (Hogan Lab)/Resources/Annotations/annotation_functions.R')
+```
+
+
+```{r}
+model <- eADAGEmodel
+compendium <- PAcompendium
+probe_dist <- probedistribution
+```
+
+
+```{r}
+#seq_model <- read.csv('seqADAGE_model_e75_relu.csv', stringsAsFactors = F)
+seq_model <- read.csv('seqADAGE_model_e75_sig.csv', stringsAsFactors = F)
+
+colnames(seq_model) <- colnames(model)
+seq_compendium <- read.csv('../data_files/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log.csv', stringsAsFactors = F)
+#seq_compendium <- seq_compendium[-c(1,2),]
+colnames(seq_compendium)[1] <- 'geneID'
+```
+
+```{r}
+seq_model <- read.csv('../outputs/e_models/300s/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_bygene_seed:660_kl1:1e-10_kl2:0_act:sigmoid_init:glorot_uniform_ep:250_tied:True_batch:10_lr:1.0_en_weights_da.csv', stringsAsFactors = F, header=F)
+seq_model<- cbind(seq_compendium[,c(1)], seq_model)
+colnames(seq_model) <- colnames(model)
+seq_model$geneID <- as.character(seq_model$geneID)
+```
+
+```{r}
+#rnaseq_data_sums <- read.csv('MOPS_WT_pstB.csv', stringsAsFactors = F, header = F)
+#rnaseq_data_sums <- read.csv('MOPS_COCUL_WT.csv', stringsAsFactors = F, header = F)
+#rnaseq_data_sums <- read.csv('COCUL_WT_phoB.csv', stringsAsFactors = F, header = F)
+rnaseq_data_sums <- read.csv('PAO1_anr_salmon_reads.csv', stringsAsFactors = F, header = T)
+rnaseq_data_sums$Name <- sapply(rnaseq_data_sums$Name, function(x) cDNA_to_PAO1(x))
+#rnaseq_data_sums$geneID <- sapply(rnaseq_data_sums$geneID, function(x) name)
+colnames(rnaseq_data_sums) <- c('geneID','WT_1','WT_2','anr_1','anr_2')
+```
+
+```{r, results = "hide", warning=FALSE}
+rnaseq_data_raw <- load_dataset(input = rnaseq_data_sums, isProcessed = TRUE,
+                         isRNAseq = TRUE, model = model,
+                         compendium = compendium, 
+                         norm01 = FALSE)
+```
+
+```{r, results = "hide", warning=FALSE}
+rnaseq_data_sums_seq <- rnaseq_data_sums
+rnaseq_data_sums_seq$geneID <- sapply(rnaseq_data_sums_seq$geneID, function(x) PA14_to_PAO1(name_to_PAO1(x)))
+rnaseq_data_raw_seq <- load_dataset(input = rnaseq_data_sums_seq, isProcessed = TRUE,
+                         isRNAseq = TRUE, model = seq_model,
+                         compendium = seq_compendium, 
+                         norm01 = FALSE)
+```
+
+```{r}
+rownames(rnaseq_data_raw) <- sapply(rnaseq_data_raw$geneID, function(x) PA14_to_PAO1(name_to_PAO1(x)))
+norm_2 <- intersect(rownames(rnaseq_data_raw), compendium$geneID)
+```
+
+```{r}
+
+rnaseq_data_normed <- zeroone_norm(input_data = rnaseq_data_raw, use_ref = TRUE,
+                            ref_data = compendium)
+```
+
+
+```{r}
+#rnaseq_data_normed_seq <- zeroone_norm(input_data = rnaseq_data_raw_seq, use_ref = TRUE,
+#                            ref_data = seq_compendium)
+rnaseq_data_raw_seq_temp <- rnaseq_data_raw_seq
+rownames(rnaseq_data_raw_seq_temp) <- rnaseq_data_raw_seq_temp$geneID
+rnaseq_data_raw_seq_temp <- rnaseq_data_raw_seq_temp[seq_model$geneID,]
+
+rnaseq_data_normed_seq <- zeroone_norm(input_data = rnaseq_data_raw_seq_temp, 
+                                       use_ref = TRUE,
+                                       ref_data = seq_compendium)
+
+#rnaseq_data_normed_seq <- zeroone_norm(input_data = rnaseq_data_raw_seq_temp, use_ref = FALSE,
+#                            ref_data = seq_compendium)
+```
+
+
+
+```{r}
+rnaseq_data_activity <- calculate_activity(input_data = rnaseq_data_normed, model = model, 
+                                           HW_cutoff = 2.5)
+```
+
+```{r}
+rnaseq_data_activity_seq <- calculate_activity(input_data = rnaseq_data_normed_seq, 
+                                               model = seq_model,
+                                               HW_cutoff = 2.5)
+```
+
+```{r}
+data_pheno <- c(rep("WT",2),rep('anr',2))
+```
+
+```{r, echo=FALSE}
+limma_result <- build_limma(rnaseq_data_activity, phenotypes = data_pheno,
+                            use.bonferroni = TRUE)
+
+limma_result_seq <- build_limma(rnaseq_data_activity_seq, phenotypes = data_pheno,
+                            use.bonferroni = TRUE)
+```
+
+```{r}
+active_sigs <- get_active_signatures(limma_result = limma_result,
+                                     pheno_group = "both", 
+                                     method = "pareto", N_fronts = 10)
+
+active_sigs_seq <- get_active_signatures(limma_result = limma_result_seq,
+                                     pheno_group = "both", 
+                                     method = "pareto", N_fronts = 15)
+```
+
+```{r}
+plot_weight_dists(seq_model,'seq_eADAGE')
+```
+
+```{r}
+plot_raw_data(rnaseq_data_raw, rnaseq_data_raw_seq_temp, 'seq_eADAGE')
+pdf(paste('seq_eADAGE','_volcano_test.pdf',sep=''), height=4,width=4)
+plot_volcano(limma_result_seq, highlight_signatures = active_sigs,
+             interactive = F)
+dev.off()
+
+pdf(paste('seq_eADAGE','_DA_heatmap.pdf',sep=''), height=6,width=6)
+plot_activity_heatmap(activity = rnaseq_data_activity_seq, signatures = active_sigs_seq)
+dev.off()
+```
+
+
+```{r}
+plot_volcano(limma_result, highlight_signatures = active_sigs,
+             interactive = TRUE)
+plot_volcano(limma_result_seq, highlight_signatures = active_sigs_seq,
+             interactive = TRUE)
+```
+
+```{r, fig.height=5}
+plot_activity_heatmap(activity = rnaseq_data_activity, signatures = active_sigs)
+plot_activity_heatmap(activity = rnaseq_data_activity_seq, signatures = active_sigs_seq)
+```
+
+```{r}
+signature_similarity <- plot_signature_overlap(selected_signatures = active_sigs,
+                                               model = model)
+
+signature_similarity <- plot_signature_overlap(selected_signatures = active_sigs_seq,
+                                               model = seq_model)
+```
+
+
+```{r}
+marginal_activity <- calculate_marginal_activity(
+  input_data = rnaseq_data_normed,
+  selected_signatures = active_sigs, model = model)
+
+marginal_activity_seq <- calculate_marginal_activity(
+  input_data = rnaseq_data_normed_seq,
+  selected_signatures = active_sigs_seq, model = seq_model)
+```
+
+
+```{r}
+  marginal_limma <- build_limma(input_data = marginal_activity,
+                              phenotypes = data_pheno)
+  marginal_limma_seq <- build_limma(input_data = marginal_activity_seq,
+                              phenotypes = data_pheno)
+```
+
+```{r}
+plot_marginal_activation(marginal_limma_result = marginal_limma,
+                         signature_order = colnames(signature_similarity),
+                         sig_cutoff = 0.05)
+```
+
+```{r}
+unique_active_sigs <- remove_redundant_signatures(marginal_limma,
+                                                  sig_cutoff = 0.05)
+unique_active_sigs_seq <- remove_redundant_signatures(marginal_limma_seq,
+                                                  sig_cutoff = 0.05)
+```
+
+```{r}
+plot_volcano(limma_result, highlight_signatures = unique_active_sigs,
+             interactive = TRUE)
+plot_volcano(limma_result_seq, highlight_signatures = unique_active_sigs_seq,
+             interactive = TRUE)
+```
+
+
+```{r}
+plot_activity_heatmap(activity = rnaseq_data_activity, signatures = unique_active_sigs)
+plot_activity_heatmap(activity = rnaseq_data_activity_seq, signatures = unique_active_sigs_seq)
+```
+
+```{r}
+KEGG <- fetch_geneset(type = "KEGG", max_size = 100, min_size = 5)
+```
+
+```{r, warning=FALSE}
+pathway_result <- annotate_signatures_with_genesets(
+  selected_signatures = active_sigs, model = model, genesets = KEGG)
+DT::datatable(pathway_result)
+```
+
+```{r, warning=FALSE}
+pathway_result_seq <- annotate_signatures_with_genesets(
+  selected_signatures = active_sigs_seq, model = seq_model, genesets = KEGG)
+DT::datatable(pathway_result_seq)
+```
+
+```{r}
+data_RNAseq_limma <- build_limma(input_data = rnaseq_data_normed, phenotypes = data_pheno)
+# build a gene:fold change table from limma result
+gene_logFC <- data.frame(geneID = rnaseq_data_normed$geneID,
+                         logFC = data_RNAseq_limma$logFC)
+DT::datatable(gene_logFC)
+head(rownames(data_RNAseq_limma))
+```
+
+
+
+```{r}
+visualize_gene_network(selected_signatures = unique_active_sigs,
+                       gene_color_value = gene_logFC,
+                       model = model, cor_cutoff = 0.5,
+                       curated_pathways = KEGG)
+```
+
+
+```{r}
+visualize_gene_network(selected_signatures = unique_active_sigs_seq,
+                       gene_color_value = gene_logFC,
+                       model = seq_model, cor_cutoff = 0.5,
+                       curated_pathways = KEGG)
+```
+
+
+# Get HWGs
+
+```{r, warning=F, message=F}
+model_names <- sapply(model$geneID, function(x) PAO1_to_name(x))
+model_hwgs_names <- data.frame(cbind(apply(model[,-1], 2, FUN = function(x) model_names[order(x, decreasing = T)] ),
+                               apply(model[,-1], 2, FUN = function(x) model_names[order(x, decreasing = F)] )),
+                               stringsAsFactors = F)
+                         
+
+colnames(model_hwgs_names) <- c(paste(colnames(model)[-1], 'pos', sep=''),paste(colnames(model)[-1], 'neg', sep=''))
+```
+
+```{r}
+da_hwgs_sA <- model_hwgs_names[,active_sigs]
+```
+
+
+```{r}
+write.csv(rnaseq_data_activity,'WTvpstB_outfiles/all_nodes_activities_WTvpstB_eADAGE.csv', row.names = T)
+write.csv(data_RNAseq_limma ,'WTvpstB_outfiles/DE_limma_result_WTvpstB_gene_expression.csv', row.names = T)
+write.csv(limma_result ,'WTvpstB_outfiles/DA_limma_result_WTvpstB_eADAGE.csv', row.names = T)
+write.csv(model_hwgs_names ,'WTvpstB_outfiles/all_nodes_WTvpstB_eADAGE.csv', row.names = F)
+write.csv(da_hwgs_sA ,'WTvpstB_outfiles/DA_nodes_WTvpstB_eADAGE.csv', row.names = F)
+```
+
+```{r}
+cuto <- 10
+intersect(unique(unlist(da_hwgs_sA[c(1:cuto),])), unique(unlist(da_hwgs_eA[c(1:cuto),])))
+```
+
+
+
+```{r}
+setdiff(unique(unlist(da_hwgs_sA[c(1:cuto),])), unique(unlist(da_hwgs_eA[c(1:cuto),])))
+
+```
+
+```{r}
+setdiff(unique(unlist(da_hwgs_eA[c(1:cuto),])), unique(unlist(da_hwgs_sA[c(1:cuto),])))
+```
+
+## Heatmaps
+
+First set a gene weight threshold
+```{r}
+model_sorted <- data.frame(cbind(apply(model[,-1], 2, FUN = function(x) x[order(x, decreasing = T)] ),
+                               apply(model[,-1], 2, FUN = function(x) -x[order(x, decreasing = F)] )),
+                               stringsAsFactors = F)
+
+sd_cutt <- 2.5
+sds_bool <- data.matrix(apply(model_sorted, 2, FUN = function(x){
+  sdc <- sd(x)*sd_cutt
+  sapply(x, function(y) y < sdc)
+  }
+  ))
+
+model_hwgs_names_only <- data.frame(replace(model_hwgs_names, sds_bool, ''))
+```
+
+```{r}
+
+DA_hwgs_names_only <- model_hwgs_names_only[,active_sigs]
+
+rownames(rnaseq_data_sums) <- sapply(rnaseq_data_sums$geneID, function(x) name_to_PAO1(x))
+
+DA_heatmaps_list <- lapply(DA_hwgs_names_only, function(x){
+  gene_names <- unlist(sapply(x[!x==''], function(y) name_to_PAO1(y)))
+  m <- rnaseq_data_normed[gene_names,]
+  colnames(m) <- colnames(rnaseq_data_sums)
+  rownames(m) <- gene_names
+    if(length(gene_names > 0)){
+    m$geneName <- paste((200+length(gene_names))-(c(1:length(gene_names))+100),sapply(gene_names, function(x) PAO1_to_name(x)),sep='_')
+  } else{
+    m$geneName <- x[!x=='']
+  }
+    m$geneID <- as.factor(gene_names)
+  m
+  })
+
+DA_heatmaps_plot <- melt(DA_heatmaps_list)
+```
+
+```{r, fig.height=20, fig.width=10}
+library(viridis)
+g <- ggplot(DA_heatmaps_plot, aes(x=variable, y=geneName, fill=value)) +
+  geom_tile() +
+  scale_fill_viridis(discrete=F) +
+  facet_wrap('L1', scales='free') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+g
+```
+## UpSet plots
+
+```{r}
+library(UpSetR)
+```
+
+```{r, fig.height=10}
+listInput <- as.list(DA_hwgs_names_only)
+
+u <- upset(fromList(listInput), nsets = 23, nintersects = NA)
+u
+```
+
+```{r, fig.height=10, fig.width=10}
+all_genes <- unique(unlist(as.list(DA_hwgs_names_only)))[! unique(unlist(as.list(DA_hwgs_names_only))) =='']
+
+all_genes_df <- data.frame('geneName' = all_genes,
+                           'geneID' = sapply(all_genes, function(x) name_to_PAO1(x)),
+                           stringsAsFactors = F)
+
+all_genes_mat <- data.frame(lapply(DA_hwgs_names_only, function(x) sapply(all_genes, function(y) as.numeric(y %in% x))))
+all_genes_plot <- cbind(all_genes_df, all_genes_mat)
+all_genes_plot$logFC <- data_RNAseq_limma[all_genes_plot$geneID,'logFC']
+
+u <- upset(all_genes_plot, nsets = 23, nintersects = NA, boxplot.summary = c('logFC'))
+u
+```
