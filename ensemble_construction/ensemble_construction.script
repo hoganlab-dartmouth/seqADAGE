@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#SBATCH -J e_const
+#SBATCH -o mpi_%j.txt
+#SBATCH -e mpi_%j.err
+#SBATCH --mail-type=END,FAIL
+##SBATCH --cpus-per-task=1
+#SBATCH --mem=128G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=020:00:00
+
+#export OMP_NUM_THREADS=6
+cd ~/seqADAGE/ensemble_construction/
+
+ensemble_folder="/dartfs-hpc/scratch/f002bx6/adage_models/ensemble_models"
+data_compendium="/dartfs-hpc/scratch/f002bx6/pao1_aligned_rnaseq_compendium_zp2_MRnorm_log_01_byall.csv"
+model_size=300
+scratch_folder='/dartfs-hpc/scratch/f002bx6'
+
+srun -n 1 Rscript ensemble_construction_p.R $data_compendium \
+/dartfs-hpc/scratch/f002bx6/adage_models/$model_size/ $scratch_folder $model_size \
+660 735 1 weighted $ensemble_folder /dartfs-hpc/scratch/f002bx6/net${model_size}_weighted_cor.txt;
