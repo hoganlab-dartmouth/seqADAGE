@@ -248,8 +248,8 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 	#print(x_train_test.shape)
 
 
-	optim = optimizers.Adadelta(lr = 0.001) # lr=0.001, rho=0.95, epsilon=1e-07
-	optim = optimizers.RMSprop(lr = lr, clipvalue=5.0)
+	#optim = optimizers.Adadelta(lr = 0.001) # lr=0.001, rho=0.95, epsilon=1e-07
+	optim = optimizers.RMSprop(learning_rate=lr, clipvalue=5.0)
 	#autoencoder.compile(optimizer=optim, loss='binary_crossentropy') # binary_crossentropy mse
 	autoencoder.compile(optimizer=optim, loss=zinbl2) # binary_crossentropy mse zinbl2
 

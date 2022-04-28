@@ -65,7 +65,7 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 		                               x_train_noisy, epochs, seed, batch_size, lr, v)
 
 
-	weights, b_weights = autoencoder.get_weights()[0:2]
+	weights, b_weights = autoencoder.get_weights()#[0:2]
 
 	file_desc = (input_file[:-4] + '_seed:' + str(seed)
 				 + "_kl1:" + str(kl1)
@@ -175,9 +175,9 @@ def write_data(file_desc, weights, b_weights, history):
 	"""
 	#print(np.shape(weights))
 	np.savetxt('../outputs/weights/data_files/' + file_desc + '_en_weights_da.csv',
-		np.matrix(weights[0]), fmt = '%s', delimiter=',')
+		np.matrix(weights), fmt = '%s', delimiter=',')
 	np.savetxt('../outputs/bias/data_files/' + file_desc + '_en_bias_da.csv',
-		np.matrix(weights[1]), fmt = '%s', delimiter=',')
+		np.matrix(b_weights), fmt = '%s', delimiter=',')
 	#np.savetxt('../outputs/' + file_desc + '_de_weights.csv',
 	#	np.matrix(weights[2]), fmt = '%s', delimiter=',')
 	#np.savetxt('../outputs/' + file_desc + '_de_bias.csv',
