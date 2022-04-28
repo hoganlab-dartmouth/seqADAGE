@@ -34,7 +34,7 @@ See jupyter notebook for test case example of training a model using run_model.p
 
 ## Documentation
 
-Data available on OSF project: https://osf.io/2pvhj/
+Data and models-in-progress available on OSF project: https://osf.io/2pvhj/
 
 Vignettes and examples to come.
 
