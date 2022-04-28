@@ -19,15 +19,11 @@
 #     outfolder: file path to folder to store the output ensemble model
 ###########################################################
 #library(ppcor)
-library(ClusterR)
-#pacman::p_load("cluster", "ff",  "readr") #"sprint",
-library(cluster)
-library(readr)
-library(ff)
+pacman::p_load("cluster", "ff",  "readr") #"sprint",
 #ptest()
 source("ConsensusClusterPlus_modified2.R")
-#source("ppam.R")
-#source("pcor.R")
+source("ppam.R")
+source("pcor.R")
 ########### load command arguments
 
 data_file <- commandArgs(trailingOnly = T)[1]
@@ -52,16 +48,6 @@ ppamHook <- function(dist, k) {
   return(assignment)
 }
 
-pcmHook <- function(dist, k) {
-  # this function hooks ppam function in the sprint package to
-  # ConsensusClusterPlus.M
-  #dist <- ff(as.matrix(dist), vmode = "double")
-  print("ppam_begin")
-  ppam_result <- Cluster_Medoids(dist, k, swap_phase= FALSE, threads=6, verbose=TRUE)
-  assignment <- ppam_result$clusters
-  print("ppam_end")
-  return(assignment)
-}
 ########### check method input
 
 if (method == "weight") {
@@ -84,7 +70,6 @@ col_n <- count.fields(data_file, sep = ",")[1]
 geneID <- read.table(data_file, sep = ",", header = T,
                      colClasses = c("character", rep("NULL", col_n - 1)))
 geneN <- nrow(geneID)
-print(geneN)
 # read in weight matrix from network files and combine them together
 combo_weight <- c()
 model_count <- 0
@@ -99,7 +84,7 @@ for (seed in begin:end) {
   netfile <- file.path(netfolder, netfile)
   #print(netfile)
   weight <- read_delim(netfile, delim = ",", col_names = F, n_max = geneN,
-                       skip = 0)
+                       skip = 2)
   weight_matrix <- data.matrix(weight[1:geneN, ])
   nodeN <- ncol(weight_matrix)
   combo_weight <- cbind(combo_weight, weight_matrix)
@@ -111,21 +96,15 @@ print("finish reading network files")
 
 if (weighted) {
   print(weighted_cor_file)
-  combo_weight_cor <- data.matrix(read_delim(weighted_cor_file, delim = "\t", col_names = F))
-  print(dim((combo_weight_cor )))
+  combo_weight_cor <- read_delim(weighted_cor_file, delim = "\t", col_names = F)
   colnames(combo_weight_cor) <- rownames(combo_weight_cor) <- colnames(combo_weight)
-  print(dim((combo_weight_cor )))
 } else {
   # calculate pearson correlation between every two weight vectors
   combo_weight_cor_file <- tempfile(pattern = "pcor", tmpdir = scratch_folder,
                                     fileext = "")
   combo_weight_cor <- pcor(combo_weight, filename_ = combo_weight_cor_file)
 }
-print("to dist")
-print(dim(as.dist(combo_weight_cor)))
-#combo_weight_cor_round <- apply(combo_weight_cor, c(1,2), FUN = function(x) round(x, digits=10))
-combo_weight_cor_dist <- ((1 - combo_weight_cor)/2)
-print(combo_weight_cor_dist[1])
+combo_weight_cor_dist <- as.dist((1 - combo_weight_cor[])/2)
 print("finish reading/calculating correlation matrix")
 
 ########### build ensemble model
@@ -133,15 +112,9 @@ print("finish reading/calculating correlation matrix")
 # consensus clustering nodes from 100 models based on their weight vectors
 print("consensus clustering starts")
 # ConsensusClusterPlus.M is a simplified version of ConsensusClusterPlus
-print("omg")
-print(dim(combo_weight_cor_dist))
 res <- ConsensusClusterPlus.M(combo_weight_cor_dist, oneK = k, reps = 10,
-<<<<<<< HEAD
-                              pItem = 0.5, pFeature = 1, distance = "pearson",
-=======
                               pItem = 0.8, pFeature = 1, distance = "pearson",
->>>>>>> dc536efdc3c9ed4970158145b9dcf519f5c4938e
-                              clusterAlg = "pcmHook",
+                              clusterAlg = "pam", #"pam", #ppamHook"
                               seed = cluster_seed, verbose = TRUE)
 print("consensus clustering finished")
 
@@ -186,5 +159,5 @@ if (exists("combo_weight_cor_file")) {
   file.remove(combo_weight_cor_file)
 }
 
-#pterminate()
+pterminate()
 quit()

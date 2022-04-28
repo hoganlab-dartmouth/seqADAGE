@@ -36,7 +36,7 @@ pathway_file="./pseudomonas_KEGG_terms.txt"
 
 # Note that the ensemble construction is done on a 64-core machine
 # the number of processors to use
-processors=6 #60
+processors=1 #60
 # the folder to store some large temporary files
 scratch_folder='/global/scratch/'
 seeds=(1) # 2 3 4 5 6 7 8 9 10
@@ -45,7 +45,7 @@ do
     #mpiexec -np $processors Rscript ensemble_construction.R $data_compendium \
     #../outputs/e_models/$model_size/ $scratch_folder $model_size \
     #737 738 $i weight $ensemble_folder;
-    Rscript ensemble_construction_p.R $data_compendium \
+    mpiexec -np $processors Rscript ensemble_construction.R $data_compendium \
     ../outputs/e_models/$model_size/ $scratch_folder $model_size \
     660 735 $i weighted $ensemble_folder ./net${model_size}_weighted_cor.txt;
 done
@@ -72,8 +72,8 @@ done
 ##########################
 
 # perform pathway enrichment analysis for ensemble models
-Rscript eADAGE_pathway_enrichment.R $ensemble_folder $pathway_file \
-$data_compendium TRUE $N_cores $HW_cutoff
+#Rscript eADAGE_pathway_enrichment.R $ensemble_folder $pathway_file \
+#$data_compendium TRUE $N_cores $HW_cutoff
 
 #export data_compendium
 # remove pathway crosstalk effects and then perform pathway enrichment
@@ -82,7 +82,7 @@ $data_compendium TRUE $N_cores $HW_cutoff
 #source ./pathway_counts_no_crosstalk.sh
 
 # compare pathway coverage between ensemble models and individual models
-Rscript analyze_ensemble_coverage.R $pathway_file
+#Rscript analyze_ensemble_coverage.R $pathway_file
 
 # compare pathway coverage between ensemble models and individual models after
 # removing crosstalk effects
