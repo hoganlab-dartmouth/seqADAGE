@@ -136,11 +136,7 @@ print("consensus clustering starts")
 print("omg")
 print(dim(combo_weight_cor_dist))
 res <- ConsensusClusterPlus.M(combo_weight_cor_dist, oneK = k, reps = 10,
-<<<<<<< HEAD
-                              pItem = 0.5, pFeature = 1, distance = "pearson",
-=======
                               pItem = 0.8, pFeature = 1, distance = "pearson",
->>>>>>> dc536efdc3c9ed4970158145b9dcf519f5c4938e
                               clusterAlg = "pcmHook",
                               seed = cluster_seed, verbose = TRUE)
 print("consensus clustering finished")

@@ -72,8 +72,8 @@ done
 ##########################
 
 # perform pathway enrichment analysis for ensemble models
-Rscript eADAGE_pathway_enrichment.R $ensemble_folder $pathway_file \
-$data_compendium TRUE $N_cores $HW_cutoff
+#Rscript eADAGE_pathway_enrichment.R $ensemble_folder $pathway_file \
+#$data_compendium TRUE $N_cores $HW_cutoff
 
 #export data_compendium
 # remove pathway crosstalk effects and then perform pathway enrichment
@@ -82,7 +82,7 @@ $data_compendium TRUE $N_cores $HW_cutoff
 #source ./pathway_counts_no_crosstalk.sh
 
 # compare pathway coverage between ensemble models and individual models
-Rscript analyze_ensemble_coverage.R $pathway_file
+#Rscript analyze_ensemble_coverage.R $pathway_file
 
 # compare pathway coverage between ensemble models and individual models after
 # removing crosstalk effects
