@@ -41,7 +41,8 @@ import Adage as ad
 
 
 def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
-			  act='sigmoid', init='glorot_uniform', tied=True, batch_size=10, v=1):
+			  act='sigmoid', init='glorot_uniform', tied=True, batch_size=10,
+			  v=1):
 	"""
 
 	"""
@@ -51,6 +52,7 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 	 # this is the size of our input
 	gene_num = np.size(all_comp, 0)
 	encoding_dim = 300
+
 
 	x_train, x_train_noisy = prep_data(all_comp, seed)
 
@@ -65,7 +67,7 @@ def run_model(input_file, seed=123, epochs=50, kl1=0, kl2=0, lr = 0.01,
 		                               x_train_noisy, epochs, seed, batch_size, lr, v)
 
 
-	weights, b_weights = autoencoder.get_weights()#[0:2]
+	weights, b_weights = autoencoder.get_weights()[0:2]
 
 	file_desc = (input_file[:-4] + '_seed:' + str(seed)
 				 + "_kl1:" + str(kl1)
@@ -93,6 +95,7 @@ def unlinked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 					kernel_initializer = init,
 					kernel_regularizer = regularizers.l1_l2(l1=kl1, l2=kl2),
     				activity_regularizer = regularizers.l1(0))(input_img)
+
 
 	decoded = layers.Dense(gene_num, activation='sigmoid',
     				activity_regularizer = regularizers.l1(0))(encoded)
